@@ -1,0 +1,15 @@
+# 隐私文件，绝不入库
+gateway/.env
+gateway/gateway.pid
+DEPLOY.md
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 系统
+Thumbs.db
+.DS_Store

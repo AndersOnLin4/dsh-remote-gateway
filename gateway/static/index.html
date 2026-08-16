@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DSH 远程网关</title>
+<link rel="stylesheet" href="/static/style.css?v=8">
+</head>
+<body>
+
+<!-- 登录视图 -->
+<section id="login-view" class="card login-card">
+  <h1>DSH 远程网关</h1>
+  <p class="muted">请输入访问密码</p>
+  <form id="login-form">
+    <input id="password" type="password" autocomplete="current-password" placeholder="密码" required>
+    <button type="submit" class="btn primary">登录</button>
+  </form>
+  <p id="login-msg" class="msg"></p>
+</section>
+
+<!-- 主界面 -->
+<section id="app-view" class="hidden">
+
+  <header class="topbar">
+    <h1 id="app-title">监控</h1>
+    <div class="topbar-right">
+      <span id="conn-dot" class="dot sm off"></span>
+      <button id="logout-btn" class="btn ghost small">退出</button>
+    </div>
+  </header>
+
+  <main id="tab-monitor" class="tab">
+    <div class="card status-card">
+      <div class="status-line">
+        <span id="status-dot" class="dot off"></span>
+        <span id="status-text">检测中…</span>
+      </div>
+      <div class="stats">
+        <div><span class="num" id="stat-working">-</span><span class="lbl">工作中</span></div>
+        <div><span class="num" id="stat-sessions">-</span><span class="lbl">会话</span></div>
+        <div><span class="num" id="stat-tokens">-</span><span class="lbl">token(K)</span></div>
+        <div><span class="num" id="stat-latest">-</span><span class="lbl">最后活动</span></div>
+      </div>
+      <div class="actions">
+        <button id="btn-open" class="btn primary">完整控制台</button>
+        <button id="btn-start" class="btn" data-act="start">启动</button>
+        <button id="btn-restart" class="btn" data-act="restart">重启</button>
+        <button id="btn-stop" class="btn danger" data-act="stop">停止</button>
+      </div>
+      <p id="ctrl-msg" class="msg"></p>
+    </div>
+
+    <div class="card" id="working-card">
+      <div class="card-head"><h2>工作中的会话</h2><span class="muted small" id="working-count"></span></div>
+      <ul id="working-list" class="sessions"></ul>
+    </div>
+  </main>
+
+  <main id="tab-sessions" class="tab hidden">
+    <div class="card">
+      <div class="card-head">
+        <h2>会话列表</h2>
+        <button id="refresh-sessions" class="btn ghost small">刷新</button>
+      </div>
+      <ul id="session-list" class="sessions"></ul>
+    </div>
+  </main>
+
+  <main id="tab-log" class="tab hidden">
+    <div class="card">
+      <div class="card-head">
+        <h2>DSH 日志</h2>
+        <button id="refresh-log" class="btn ghost small">刷新</button>
+      </div>
+      <pre id="log-view" class="log">（暂无日志）</pre>
+    </div>
+  </main>
+
+  <!-- 底部导航 -->
+  <nav class="tabbar">
+    <button class="tabbtn active" data-tab="monitor">监控</button>
+    <button class="tabbtn" data-tab="sessions">会话</button>
+    <button class="tabbtn" data-tab="log">日志</button>
+  </nav>
+
+</section>
+
+<!-- 会话预览浮层 -->
+<section id="preview-view" class="hidden">
+  <header class="topbar preview-top">
+    <button id="preview-back" class="btn ghost">‹ 返回</button>
+    <h1 id="preview-title">会话</h1>
+    <span></span>
+  </header>
+  <div id="preview-body" class="preview-body"></div>
+  <div id="reply-box" class="reply-box hidden">
+    <input id="reply-input" type="text" placeholder="输入回复，回车发送" autocomplete="off">
+    <button id="reply-send" class="btn primary">发送</button>
+  </div>
+</section>
+
+<script src="/static/app.js?v=8"></script>
+</body>
+</html>
