@@ -97,3 +97,7 @@ gateway/
 ## 免责声明
 
 本项目用于管理你自己的 DeepSeek Harness 实例。远程控制 = 远程执行代码，请自行评估风险；不要把网关暴露到公网，不要共享登录凭据。
+
+---
+
+**AndersOnLin4** · 联系邮箱：andersonlin1107@gmail.com · 更多项目：[github.com/AndersOnLin4/moneybook](https://github.com/AndersOnLin4/moneybook)

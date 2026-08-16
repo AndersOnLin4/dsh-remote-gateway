@@ -27,9 +27,12 @@ function Get-TailscaleInfo($exe) {
 }
 
 Write-Host ''
-Write-Host '====================================' -ForegroundColor Cyan
-Write-Host '  DSH 远程网关 一键启动' -ForegroundColor Cyan
-Write-Host '====================================' -ForegroundColor Cyan
+Write-Host '  ================================================' -ForegroundColor Cyan
+Write-Host '    DSH 远程网关  ★  AndersOnLin4' -ForegroundColor Cyan
+Write-Host '    联系邮箱 : andersonlin1107@gmail.com' -ForegroundColor DarkCyan
+Write-Host '    更多项目 : https://github.com/AndersOnLin4/moneybook' -ForegroundColor DarkCyan
+Write-Host '  ================================================' -ForegroundColor Cyan
+Write-Host ''
 
 # ---------- 1/3 Tailscale：自动识别 + 唤醒 ----------
 if (Test-Path $TS) {
@@ -56,7 +59,11 @@ if (Test-Path $TS) {
         if ($script:TSInfo.Online) {
             Write-Host '      已连接 ✓' -ForegroundColor Green
         } else {
-            Write-Host '      !! 仍未连接：若上方出现登录链接，请先在浏览器完成认证后重试' -ForegroundColor Red
+            Write-Host '      !! 仍未连接' -ForegroundColor Red
+            Write-Host '      Tailscale 需要你先自行开启并登录一次（本项目只负责唤醒服务与连接，不代登录）：' -ForegroundColor Yellow
+            Write-Host '        方式1: 点击系统托盘 Tailscale 图标 → 登录（浏览器完成认证）' -ForegroundColor White
+            Write-Host '        方式2: 命令行执行 tailscale up 并按提示打开链接登录' -ForegroundColor White
+            Write-Host '        登录完成后，再双击本脚本即可显示外网地址' -ForegroundColor White
         }
         $serve = (& $TS serve status 2>&1 | Out-String)
         if ($serve -match 'proxy http://127\.0\.0\.1:8080') {
@@ -130,7 +137,7 @@ if ($script:TSInfo -and $script:TSInfo.Online) {
     if ($script:TSInfo.IP) { Write-Host "  WireGuard: $($script:TSInfo.IP):8080" -ForegroundColor White }
     Write-Host '  （手机装 Tailscale 登录同账号后即可访问上面两个地址）' -ForegroundColor DarkGray
 } elseif (Test-Path $TS) {
-    Write-Host '  Tailscale: 未连接。请先登录（tailscale up 或系统托盘图标），再重跑本脚本' -ForegroundColor Yellow
+    Write-Host '  Tailscale: 未连接。请先在系统托盘手动开启并登录 Tailscale（本项目不代登录），再重跑本脚本' -ForegroundColor Yellow
 }
 
 if (Test-Path $envFile) {
@@ -144,4 +151,7 @@ if (Test-Path $envFile) {
 Write-Host '====================================' -ForegroundColor Cyan
 Write-Host ''
 Write-Host '提示：手机可直接打开上方"HTTPS"地址；日志在 DSH 安装目录的 logs\ 下'
+Write-Host 'Tailscale 外网访问需你先在系统托盘开启并登录一次（脚本只做自动唤醒与连接）'
+Write-Host ''
+Write-Host '  — AndersOnLin4 · andersonlin1107@gmail.com · github.com/AndersOnLin4/moneybook' -ForegroundColor DarkCyan
 Write-Host ''
