@@ -27,11 +27,11 @@ function Get-TailscaleInfo($exe) {
 }
 
 Write-Host ''
-Write-Host '  ================================================' -ForegroundColor Cyan
+Write-Host '  ==================================================' -ForegroundColor Cyan
 Write-Host '    DSH 远程网关  ★  AndersOnLin4' -ForegroundColor Cyan
 Write-Host '    联系邮箱 : andersonlin1107@gmail.com' -ForegroundColor DarkCyan
-Write-Host '    更多项目 : https://github.com/AndersOnLin4/moneybook' -ForegroundColor DarkCyan
-Write-Host '  ================================================' -ForegroundColor Cyan
+Write-Host '    项目主页 : https://github.com/AndersOnLin4/' -ForegroundColor DarkCyan
+Write-Host '  ==================================================' -ForegroundColor Cyan
 Write-Host ''
 
 # ---------- 1/3 Tailscale：自动识别 + 唤醒 ----------
@@ -153,5 +153,8 @@ Write-Host ''
 Write-Host '提示：手机可直接打开上方"HTTPS"地址；日志在 DSH 安装目录的 logs\ 下'
 Write-Host 'Tailscale 外网访问需你先在系统托盘开启并登录一次（脚本只做自动唤醒与连接）'
 Write-Host ''
-Write-Host '  — AndersOnLin4 · andersonlin1107@gmail.com · github.com/AndersOnLin4/moneybook' -ForegroundColor DarkCyan
+Write-Host '  --------------------------------------------------' -ForegroundColor DarkCyan
+Write-Host '  DSH 远程网关 · AndersOnLin4 · andersonlin1107@gmail.com' -ForegroundColor DarkCyan
+Write-Host '  项目主页: https://github.com/AndersOnLin4/' -ForegroundColor DarkCyan
+Write-Host '  --------------------------------------------------' -ForegroundColor DarkCyan
 Write-Host ''

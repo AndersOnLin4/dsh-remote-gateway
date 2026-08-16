@@ -155,4 +155,4 @@ gateway/
 - 代码采用 [MIT License](LICENSE) 开源许可
 - © 2026 AndersOnLin4
 - 联系邮箱：andersonlin1107@gmail.com
-- 更多项目：[github.com/AndersOnLin4/moneybook](https://github.com/AndersOnLin4/moneybook)
+- 项目主页：[github.com/AndersOnLin4](https://github.com/AndersOnLin4/)
