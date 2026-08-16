@@ -4,7 +4,9 @@ import time
 
 from pathlib import Path
 
-LOG = Path(r"G:\harness\logs\gateway.out.log")
+from app import config
+
+LOG = config.LOG_DIR / "gateway.out.log"
 LOG.parent.mkdir(parents=True, exist_ok=True)
 try:
     f = open(LOG, "a", encoding="utf-8")
@@ -13,7 +15,7 @@ try:
 except OSError:
     pass
 
-from app import config, dsh_manager, monitor
+from app import dsh_manager, monitor
 
 if __name__ == "__main__":
     if not monitor.dsh_running():

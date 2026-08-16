@@ -44,8 +44,43 @@ DSH_WEB_PORT = int(os.environ.get("DSH_WEB_PORT", "3080"))
 DSH_WEB_BASE = f"http://{DSH_WEB_HOST}:{DSH_WEB_PORT}"
 DSH_WS_BASE = f"ws://{DSH_WEB_HOST}:{DSH_WEB_PORT}"
 
-HARNESS_ROOT = Path(os.environ.get("HARNESS_ROOT", r"G:\harness"))
-DSH_HOME = Path(os.environ.get("DSH_HOME", str(HARNESS_ROOT / "dsh-home")))
+
+def _detect_harness() -> tuple:
+    """自动探测 DeepSeek Harness 安装目录（含 dsh-home/sessions 的目录即为 dsh-home）。"""
+    env_dsh = os.environ.get("DSH_HOME")
+    if env_dsh:
+        p = Path(env_dsh)
+        if (p / "sessions").exists():
+            return p.parent, p
+    env_root = os.environ.get("HARNESS_ROOT")
+    if env_root:
+        p = Path(env_root)
+        if (p / "dsh-home" / "sessions").exists():
+            return p, p / "dsh-home"
+    for drive in ("C:", "D:", "E:", "F:", "G:"):
+        for name in ("harness", "dsh", "deepseek-harness"):
+            c = Path(f"{drive}\\{name}")
+            if (c / "dsh-home" / "sessions").exists():
+                return c, c / "dsh-home"
+    home = Path.home() / "harness"
+    if (home / "dsh-home" / "sessions").exists():
+        return home, home / "dsh-home"
+    return None, None
+
+
+_DETECTED_ROOT, _DETECTED_DSH = _detect_harness()
+
+if _DETECTED_ROOT is not None and "HARNESS_ROOT" not in os.environ:
+    with ENV_FILE.open("a", encoding="utf-8") as f:
+        f.write(f"HARNESS_ROOT={_DETECTED_ROOT}\n")
+    os.environ["HARNESS_ROOT"] = str(_DETECTED_ROOT)
+if _DETECTED_DSH is not None and "DSH_HOME" not in os.environ:
+    with ENV_FILE.open("a", encoding="utf-8") as f:
+        f.write(f"DSH_HOME={_DETECTED_DSH}\n")
+    os.environ["DSH_HOME"] = str(_DETECTED_DSH)
+
+HARNESS_ROOT = Path(os.environ.get("HARNESS_ROOT", str(_DETECTED_ROOT or Path.home() / "harness")))
+DSH_HOME = Path(os.environ.get("DSH_HOME", str(_DETECTED_DSH or HARNESS_ROOT / "dsh-home")))
 SESSIONS_DIR = DSH_HOME / "sessions"
 NODE_EXE = Path(os.environ.get("NODE_EXE", str(HARNESS_ROOT / "nodejs" / "node.exe")))
 DSH_BIN = Path(os.environ.get("DSH_BIN", str(HARNESS_ROOT / "npm" / "node_modules" / "@deepseek-ai" / "dsh" / "lib" / "bin.js")))
