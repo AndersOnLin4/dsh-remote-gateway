@@ -2,6 +2,7 @@
 gateway/.env
 gateway/gateway.pid
 DEPLOY.md
+归档/
 *.log
 
 # Python
