@@ -4,6 +4,8 @@ import time
 
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # 保证任意工作目录下可导入 app 包
+
 from app import config
 
 LOG = config.LOG_DIR / "gateway.out.log"

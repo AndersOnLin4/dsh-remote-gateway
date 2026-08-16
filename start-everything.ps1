@@ -31,30 +31,41 @@ Write-Host '====================================' -ForegroundColor Cyan
 Write-Host '  DSH 远程网关 一键启动' -ForegroundColor Cyan
 Write-Host '====================================' -ForegroundColor Cyan
 
-# ---------- 1/3 Tailscale ----------
+# ---------- 1/3 Tailscale：自动识别 + 唤醒 ----------
 if (Test-Path $TS) {
     $svc = Get-Service -Name 'Tailscale' -ErrorAction SilentlyContinue
-    if ($svc -and $svc.Status -ne 'Running') {
-        Write-Host '[1/3] 启动 Tailscale 服务...' -ForegroundColor Yellow
-        Start-Service -Name 'Tailscale'
-        Start-Sleep -Seconds 4
-    }
-    Write-Host '[1/3] 连接 Tailscale...' -ForegroundColor Yellow
-    & $TS up --timeout 25s 2>&1 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
-    Start-Sleep -Seconds 3
-    $script:TSInfo = Get-TailscaleInfo $TS
-    if ($script:TSInfo.Online) {
-        Write-Host '      已连接' -ForegroundColor Green
+    if (-not $svc) {
+        Write-Host '[1/3] 未检测到 Tailscale 服务（可到 tailscale.com/download 安装，免费）' -ForegroundColor Yellow
     } else {
-        Write-Host '      !! 未连接：如提示需登录，请按上方链接完成认证后重试' -ForegroundColor Red
-    }
-    $serve = (& $TS serve status 2>&1 | Out-String)
-    if ($serve -match 'proxy http://127\.0\.0\.1:8080') {
-        Write-Host '      HTTPS 转发已就绪' -ForegroundColor Green
-    } else {
-        Write-Host '      配置 HTTPS 转发（tailscale serve）...' -ForegroundColor Yellow
-        & $TS serve --bg 8080 2>&1 | Out-Null
-        Start-Sleep -Seconds 1
+        if ($svc.Status -ne 'Running') {
+            Write-Host '[1/3] 唤醒 Tailscale 服务...' -ForegroundColor Yellow
+            Start-Service -Name 'Tailscale' -ErrorAction SilentlyContinue
+            for ($i = 0; $i -lt 20; $i++) {
+                Start-Sleep -Milliseconds 500
+                if ((Get-Service -Name 'Tailscale' -ErrorAction SilentlyContinue).Status -eq 'Running') { break }
+            }
+        }
+        Write-Host '[1/3] 连接 Tailscale...' -ForegroundColor Yellow
+        $upOut = & $TS up --timeout 25s 2>&1
+        $upOut | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
+        for ($i = 0; $i -lt 20; $i++) {
+            Start-Sleep -Seconds 1
+            $script:TSInfo = Get-TailscaleInfo $TS
+            if ($script:TSInfo.Online) { break }
+        }
+        if ($script:TSInfo.Online) {
+            Write-Host '      已连接 ✓' -ForegroundColor Green
+        } else {
+            Write-Host '      !! 仍未连接：若上方出现登录链接，请先在浏览器完成认证后重试' -ForegroundColor Red
+        }
+        $serve = (& $TS serve status 2>&1 | Out-String)
+        if ($serve -match 'proxy http://127\.0\.0\.1:8080') {
+            Write-Host '      HTTPS 转发已就绪 ✓' -ForegroundColor Green
+        } else {
+            Write-Host '      配置 HTTPS 转发（tailscale serve）...' -ForegroundColor Yellow
+            & $TS serve --bg 8080 2>&1 | Out-Null
+            Start-Sleep -Seconds 1
+        }
     }
 } else {
     Write-Host '[1/3] 未找到 Tailscale，跳过（局域网访问不受影响）' -ForegroundColor Yellow
@@ -83,7 +94,8 @@ if ($gw) {
 } else {
     Write-Host '[3/3] 启动网关（自动拉起 DSH）...' -ForegroundColor Yellow
     if (Test-Path $pythonw) {
-        Start-Process -FilePath $pythonw -ArgumentList (Join-Path $Root 'gateway\start_all.py') -WindowStyle Hidden
+        $gwScript = '"' + (Join-Path $Root 'gateway\start_all.py') + '"'
+        Start-Process -FilePath $pythonw -ArgumentList $gwScript -WorkingDirectory (Join-Path $Root 'gateway') -WindowStyle Hidden
     } else {
         Write-Host '      !! 未找到虚拟环境，请先运行 install.cmd' -ForegroundColor Red
     }
