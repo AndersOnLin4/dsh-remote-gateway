@@ -19,6 +19,12 @@
 - 部署与使用文档：`..\DEPLOY.md`（含本机真实地址，勿外传）
 - 方案设计：`..\PLAN.md`
 
+## GitHub 推送状态
+
+- ✅ 已推送：https://github.com/AndersOnLin4/dsh-remote-gateway （commit `a27ddff`）
+- 推送内容：gateway 代码 + 归档文档 + PLAN.md + README.md（已脱敏）
+- 后续更新：见 `GitHub 推送说明.md`
+
 ## 隐私提示
 
-`归档` 内的文档均使用占位符（如 `<电脑局域网IP>`、`<tailnet名称>`、`<电脑100.x地址>`），可安全外传；`DEPLOY.md` 含真实内网信息，仅限本机使用。
+`归档` 内的文档均使用占位符（如 `<电脑局域网IP>`、`<tailnet名称>`），可安全外传；`DEPLOY.md` 含真实内网信息，仅限本机使用。
