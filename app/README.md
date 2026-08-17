@@ -1,4 +1,4 @@
-# 📱 DSH 远程网关 Android App（app/）
+# DSH 远程网关 Android App（app/）
 
 A 线产物：Flutter 编写的 Android 原生客户端，直连网关 REST/SSE 接口，出门在外也能**监控、回复、答题**，agent 提问**秒推通知**。
 
