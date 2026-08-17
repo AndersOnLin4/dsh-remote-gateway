@@ -1,0 +1,40 @@
+{
+  "name": "dsh-gateway-desktop",
+  "version": "0.1.0",
+  "description": "DSH 远程网关 Windows 桌面端：托盘守护 + 自动登录仪表盘",
+  "author": "AndersOnLin4",
+  "license": "MIT",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron . --smoke-test",
+    "genicon": "node scripts/gen-icon.js",
+    "dist": "electron-builder --win",
+    "dir": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.andersonlin.dshgateway",
+    "productName": "DSH-Gateway-Desktop",
+    "icon": "build/icon.ico",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "DSH-Gateway-Desktop-${version}-portable.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3"
+  }
+}

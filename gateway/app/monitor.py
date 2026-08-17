@@ -25,8 +25,52 @@ def is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
-def dsh_running() -> bool:
-    return is_port_open(config.DSH_WEB_HOST, config.DSH_WEB_PORT)
+# ---- DSH 探活（防抖 + 拒绝/超时区分） ----
+# DSH 事件循环繁忙时 listen backlog 塞满 → 连接"超时"（活着但忙）；
+# 端口无监听 → 连接被"拒绝"（真死了）。
+# 非强制：只有"拒绝"计入判死（连续 4 次，约 10 秒）；超时一律视为存活，避免繁忙期误报"未运行"。
+# 强制（控制路径启停用）：单次探测立即定生死，不吃防抖——否则"启动"按钮会在 DSH
+# 真的停机时误判"已在运行"而没有反应。
+_PROBE = {"running": True, "fails": 0, "at": 0.0}
+_PROBE_INTERVAL = 2.0
+_PROBE_FAILS_TO_DOWN = 4
+
+
+def _probe_refused() -> bool:
+    try:
+        s = socket.create_connection((config.DSH_WEB_HOST, config.DSH_WEB_PORT), timeout=1.5)
+        s.close()
+        return False
+    except ConnectionRefusedError:
+        return True
+    except OSError:
+        return False  # 超时等瞬态 → 视为存活（繁忙）
+
+
+def probe_dsh(force: bool = False) -> bool:
+    now = time.time()
+    if not force and now - _PROBE["at"] < _PROBE_INTERVAL:
+        return _PROBE["running"]
+    refused = _probe_refused()
+    if force:
+        # 控制路径：单次探测立即定生死
+        _PROBE["running"] = not refused
+        _PROBE["fails"] = 0 if not refused else _PROBE["fails"]
+        _PROBE["at"] = now
+        return _PROBE["running"]
+    if not refused:
+        _PROBE["fails"] = 0
+        _PROBE["running"] = True
+    else:
+        _PROBE["fails"] += 1
+        if _PROBE["fails"] >= _PROBE_FAILS_TO_DOWN:
+            _PROBE["running"] = False
+    _PROBE["at"] = now
+    return _PROBE["running"]
+
+
+def dsh_running(force: bool = False) -> bool:
+    return probe_dsh(force)
 
 
 def list_sessions(limit: int = 50):

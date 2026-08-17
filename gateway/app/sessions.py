@@ -1,7 +1,10 @@
-"""轻量会话读取：列表（索引缓存）+ 尾段重要节点提取（只解压尾部帧）。"""
+"""轻量会话读取：列表（索引缓存）+ 尾段重要节点提取（只解压尾部帧）。
+性能优化：session_tail 结果按 (sid, 文件大小, mtime, n) 缓存；
+调用方传 unchanged_size（上次拿到的文件大小），文件未变化时返回轻量 unchanged 响应。"""
 import glob
 import json
 import os
+import threading
 import time
 import uuid
 
@@ -17,6 +20,11 @@ _TEXT_LIMIT = 4000                 # 单条文本上限
 _TOOL_LIMIT = 200                  # 工具结果截断
 
 _dctx = zstandard.ZstdDecompressor()
+
+# tail 结果缓存：会话文件只追加，按 (sid, size, mtime, n) 精确失效
+_TAIL_CACHE: dict = {}
+_TAIL_CACHE_LOCK = threading.Lock()
+_TAIL_CACHE_MAX = 64
 
 
 def _read_json(path):
@@ -84,12 +92,29 @@ def _extract_text_parts(content):
                       if isinstance(p, dict) and p.get("type") == "text" and p.get("text"))
 
 
-def session_tail(session_id: str, n: int = 40):
+def session_tail(session_id: str, n: int = 40, unchanged_size=None):
     """读取会话末尾一段，只返回：用户提问 + 每轮最终中文回复 + 选择题。
     思考/工具细节在服务端过滤，不传到手机。"""
     f = _find_session_file(session_id)
     if not f:
         return {"ok": False, "detail": "会话不存在"}
+    try:
+        st = os.stat(f)
+        file_size = st.st_size
+        file_mtime = st.st_mtime
+    except OSError:
+        return {"ok": False, "detail": "读取失败"}
+
+    # 增量协议：文件大小未变 → 轻量响应（App 保留已有 entries）
+    if unchanged_size is not None and unchanged_size == file_size:
+        return {"ok": True, "unchanged": True, "file_size": file_size, "entries": [], "filtered": {}}
+
+    key = (session_id, file_size, file_mtime, n)
+    with _TAIL_CACHE_LOCK:
+        cached = _TAIL_CACHE.get(key)
+    if cached is not None:
+        return dict(cached)
+
     try:
         with open(f, "rb") as fh:
             fh.seek(0, 2)
@@ -99,7 +124,11 @@ def session_tail(session_id: str, n: int = 40):
     except OSError:
         return {"ok": False, "detail": "读取失败"}
     if not data:
-        return {"ok": True, "entries": [], "filtered": {"thinking": 0, "tools": 0, "other": 0}}
+        result = {"ok": True, "unchanged": False, "file_size": file_size,
+                  "entries": [], "filtered": {"thinking": 0, "tools": 0, "other": 0}}
+        with _TAIL_CACHE_LOCK:
+            _TAIL_CACHE[key] = result
+        return dict(result)
     start = data.find(_ZSTD_MAGIC)
     if start < 0:
         return {"ok": False, "detail": "数据格式异常"}
@@ -172,7 +201,13 @@ def session_tail(session_id: str, n: int = 40):
                 seen_turns.add(t)
         result.append(e)
     result.reverse()
-    return {"ok": True, "entries": result[-n:], "filtered": filtered}
+    out = {"ok": True, "unchanged": False, "file_size": file_size,
+           "entries": result[-n:], "filtered": filtered}
+    with _TAIL_CACHE_LOCK:
+        if len(_TAIL_CACHE) >= _TAIL_CACHE_MAX:
+            _TAIL_CACHE.clear()
+        _TAIL_CACHE[key] = out
+    return dict(out)
 
 
 async def send_prompt(session_id: str, text: str, tz: str = "Asia/Shanghai"):

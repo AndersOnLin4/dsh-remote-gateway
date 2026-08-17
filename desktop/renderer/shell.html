@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSH 网关 · 桌面端</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: #111827; color: #e5e7eb;
+    padding: 20px; min-height: 100vh;
+    -webkit-user-select: none; user-select: none;
+  }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  .muted { color: #9ca3af; font-size: 12px; margin-bottom: 16px; word-break: break-all; }
+  .banner { padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
+  .banner.warn { background: #3b2f10; color: #fbbf24; border: 1px solid #7c5c12; }
+  .banner.err { background: #3b1010; color: #f87171; border: 1px solid #7c1d1d; }
+  .card { background: #1f2937; border: 1px solid #374151; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+  .dot.on { background: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
+  .dot.off { background: #e74c3c; }
+  .tag { font-size: 11px; color: #9ca3af; }
+  .btn {
+    border: 1px solid #4b5563; background: #374151; color: #e5e7eb;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    transition: background .15s;
+  }
+  .btn:hover { background: #4b5563; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.primary { background: #2563eb; border-color: #2563eb; }
+  .btn.primary:hover { background: #1d4ed8; }
+  .btn.danger { background: #7f1d1d; border-color: #991b1b; }
+  .btn.danger:hover { background: #991b1b; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .grid button { width: 100%; }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+  .log { background: #0b1220; border: 1px solid #1f2937; border-radius: 8px; padding: 10px;
+         font: 11px/1.5 Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+         max-height: 220px; overflow: auto; -webkit-user-select: text; user-select: text; }
+  .foot { margin-top: 16px; display: flex; gap: 8px; }
+  .foot .btn { flex: 1; }
+</style>
+</head>
+<body>
+  <h1>DSH 网关 · 桌面端</h1>
+  <div class="muted" id="gateway-dir"></div>
+
+  <div id="banner"></div>
+
+  <div class="card">
+    <div class="row">
+      <span><span class="dot" id="dsh-dot"></span>DSH <span id="dsh-state" class="tag"></span></span>
+      <span><span class="dot" id="gw-dot"></span>网关 <span id="gw-state" class="tag"></span></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+      <button class="btn" id="b-dsh-start">启动 DSH</button>
+      <button class="btn" id="b-dsh-restart">重启 DSH</button>
+      <button class="btn danger" id="b-dsh-stop">停止 DSH</button>
+    </div>
+    <div class="grid" style="margin-top:8px">
+      <button class="btn" id="b-gw-start">启动网关</button>
+      <button class="btn" id="b-gw-stop">停止网关</button>
+      <button class="btn primary" id="b-open-dash">打开面板</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <label class="chk"><input type="checkbox" id="autostart"> 开机自启（随 Windows 启动托盘驻守）</label>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-bottom:8px">
+      <span class="tag">网关输出日志</span>
+      <button class="btn" id="b-refresh-log" style="padding:4px 10px;font-size:12px">刷新</button>
+    </div>
+    <pre class="log" id="log-view">加载中…</pre>
+  </div>
+
+  <div class="foot">
+    <button class="btn" id="b-info">📱 访问信息</button>
+    <button class="btn" id="b-console">完整控制台</button>
+    <button class="btn" id="b-quit">退出（保留进程）</button>
+    <button class="btn danger" id="b-quit-stop">退出并停止托管进程</button>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = window.dshDesktop;
+const REASONS = {
+  'gw-down': ['warn', '网关未运行（127.0.0.1:8080 未监听）。点"启动网关"由本程序拉起，或点"打开面板"重试。'],
+  'login-fail': ['err', '自动登录失败：网关密码不匹配或已变更。请检查 gateway/.env 的 GATEWAY_PASSWORD，或打开面板手动输入密码。'],
+  'load-fail': ['err', '面板加载失败，请重试；若持续失败请查看日志。'],
+};
+
+let state = null;
+
+function render() {
+  if (!state) return;
+  const dshUp = state.dsh && state.dsh.listening;
+  const gwUp = state.gw && state.gw.listening;
+  $('dsh-dot').className = 'dot ' + (dshUp ? 'on' : 'off');
+  $('gw-dot').className = 'dot ' + (gwUp ? 'on' : 'off');
+  $('dsh-state').textContent = dshUp
+    ? `运行中${state.dsh.owned ? '（本程序托管）' : '（外部）'} · 端口 ${state.dshPort}`
+    : `已停止 · 端口 ${state.dshPort}`;
+  $('gw-state').textContent = gwUp
+    ? `运行中${state.gw.owned ? '（本程序托管）' : '（外部收养）'} · 端口 ${state.gatewayPort}`
+    : `未运行 · 端口 ${state.gatewayPort}`;
+  $('b-dsh-start').disabled = dshUp;
+  $('b-dsh-restart').disabled = !dshUp;
+  $('b-dsh-stop').disabled = !dshUp;
+  $('b-gw-start').disabled = gwUp;
+  $('b-gw-stop').disabled = !(gwUp && state.gw.owned);
+  const auto = $('autostart');
+  auto.checked = !!state.autostart;
+  auto.disabled = !state.autostartAvailable;
+  $('gateway-dir').textContent = '网关目录：' + (state.gatewayDir || '未知');
+}
+
+function showBanner(kind, text) {
+  $('banner').className = 'banner ' + kind;
+  $('banner').textContent = text;
+}
+
+function refreshLog() {
+  $('log-view').textContent = '加载中…';
+  api.getLog().then((t) => { $('log-view').textContent = t || '（暂无日志）'; });
+}
+
+function doAction(kind, act) {
+  api.action(kind, act).then((r) => {
+    showBanner(r && r.ok ? 'warn' : 'err', (r && r.detail) || (r && r.ok ? '操作成功' : '操作失败'));
+    refreshLog();
+  });
+}
+
+$('b-dsh-start').onclick = () => doAction('dsh', 'start');
+$('b-dsh-restart').onclick = () => { if (confirm('确认重启 DSH？')) doAction('dsh', 'restart'); };
+$('b-dsh-stop').onclick = () => { if (confirm('确认停止 DSH？')) doAction('dsh', 'stop'); };
+$('b-gw-start').onclick = () => doAction('gw', 'start');
+$('b-gw-stop').onclick = () => { if (confirm('确认停止网关（本程序托管的实例）？')) doAction('gw', 'stop'); };
+$('b-open-dash').onclick = () => api.openDashboard();
+$('b-console').onclick = () => api.openConsole();
+$('b-info').onclick = () => api.openInfo();
+$('b-refresh-log').onclick = refreshLog;
+$('b-quit').onclick = () => api.quit(false);
+$('b-quit-stop').onclick = () => api.quit(true);
+$('autostart').onchange = (e) => {
+  api.setAutostart(e.target.checked).then((r) => {
+    if (r && !r.ok) showBanner('warn', r.detail || '设置失败');
+  });
+};
+
+api.getState().then((s) => { state = s; render(); refreshLog(); });
+api.onState((s) => { state = s; render(); });
+
+const q = new URLSearchParams(location.search);
+const reason = q.get('reason');
+if (reason && REASONS[reason]) showBanner(REASONS[reason][0], REASONS[reason][1]);
+</script>
+</body>
+</html>

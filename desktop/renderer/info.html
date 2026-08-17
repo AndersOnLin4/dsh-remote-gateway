@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>手机访问信息</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    background: #111827; color: #e5e7eb;
+    padding: 16px; min-height: 100vh;
+    -webkit-user-select: none; user-select: none;
+  }
+  h1 { font-size: 17px; margin-bottom: 2px; }
+  .sub { color: #9ca3af; font-size: 12px; margin-bottom: 14px; }
+  .card { background: #1f2937; border: 1px solid #374151; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .card .lbl { font-size: 11px; color: #9ca3af; margin-bottom: 4px; }
+  .card .val { font-size: 14px; word-break: break-all; line-height: 1.5; }
+  .card .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .btn {
+    border: 1px solid #4b5563; background: #374151; color: #e5e7eb;
+    padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 12px;
+    white-space: nowrap;
+  }
+  .btn:hover { background: #4b5563; }
+  .btn.primary { background: #2563eb; border-color: #2563eb; }
+  .btn.ghost { background: transparent; }
+  .hint { font-size: 11px; color: #fbbf24; background: #3b2f10; border: 1px solid #7c5c12;
+         border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; line-height: 1.6; }
+  .ok { color: #2ecc71; }
+  .bad { color: #f87171; }
+  .foot { margin-top: 14px; display: flex; gap: 8px; }
+  .foot .btn { flex: 1; padding: 10px; font-size: 13px; }
+  .mono { font-family: Consolas, monospace; }
+</style>
+</head>
+<body>
+  <h1>📱 手机访问信息</h1>
+  <div class="sub">把下面任一地址发给手机，配合登录密码即可访问</div>
+
+  <div class="hint" id="ts-hint" hidden>
+    Tailscale 尚未连接：请先点击系统托盘 Tailscale 图标登录一次（本项目只负责唤醒与连接，不代登录）。
+  </div>
+
+  <div class="card">
+    <div class="lbl">🟢 局域网（同一 Wi-Fi 下手机直接打开）</div>
+    <div class="row">
+      <div class="val mono" id="lan-url">检测中…</div>
+      <button class="btn" id="b-lan">复制</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">🔒 外网 HTTPS（Tailscale，出门在外用这个）</div>
+    <div class="row">
+      <div class="val mono" id="https-url">检测中…</div>
+      <button class="btn" id="b-https">复制</button>
+    </div>
+    <div class="sub" style="margin-top:6px">手机装 Tailscale App 并登录同一账号即可；流量下也可访问</div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">🔑 登录密码（与 gateway\.env 中一致）</div>
+    <div class="row">
+      <div class="val mono" id="password">••••••••</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn ghost" id="b-eye">显示</button>
+        <button class="btn" id="b-pw">复制</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <span class="lbl" style="margin:0">DSH <span id="dsh-st" class="bad">—</span></span>
+      <span class="lbl" style="margin:0">网关 <span id="gw-st" class="bad">—</span></span>
+      <span class="lbl" style="margin:0">Tailscale <span id="ts-st" class="bad">—</span></span>
+    </div>
+  </div>
+
+  <div class="foot">
+    <button class="btn" id="b-dash">打开面板</button>
+    <button class="btn primary" id="b-close">知道了</button>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = window.dshDesktop;
+let info = null;
+let pwShown = false;
+
+function render(a) {
+  info = a;
+  $('lan-url').textContent = a.lanUrl || '未检测到局域网 IP';
+  $('https-url').textContent = a.httpsUrl || (a.tsInstalled ? '未连接（先登录 Tailscale）' : '未安装 Tailscale');
+  $('dsh-st').textContent = a.dshUp ? '运行中' : '已停止';
+  $('dsh-st').className = a.dshUp ? 'ok' : 'bad';
+  $('gw-st').textContent = a.gwUp ? '运行中' : '未运行';
+  $('gw-st').className = a.gwUp ? 'ok' : 'bad';
+  $('ts-st').textContent = a.tsOnline ? '已连接' : (a.tsInstalled ? '未连接' : '未安装');
+  $('ts-st').className = a.tsOnline ? 'ok' : 'bad';
+  $('ts-hint').hidden = !(a.tsInstalled && !a.tsOnline);
+  $('b-lan').disabled = !a.lanUrl;
+  $('b-https').disabled = !a.httpsUrl;
+  $('b-pw').disabled = !a.passwordSet;
+  if (!pwShown) $('password').textContent = '••••••••';
+}
+
+$('b-lan').onclick = () => api.copyText(info.lanUrl);
+$('b-https').onclick = () => api.copyText(info.httpsUrl);
+$('b-pw').onclick = () => api.copyText(info.password);
+$('b-eye').onclick = () => {
+  pwShown = !pwShown;
+  $('password').textContent = pwShown ? (info.password || '') : '••••••••';
+  $('b-eye').textContent = pwShown ? '隐藏' : '显示';
+};
+$('b-dash').onclick = () => api.openDashboard();
+$('b-close').onclick = () => window.close();
+
+api.getAccessInfo().then(render);
+api.onAccessInfo(render);
+</script>
+</body>
+</html>

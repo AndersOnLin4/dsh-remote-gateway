@@ -29,7 +29,7 @@ def _started_by_us() -> bool:
 
 def start() -> dict:
     global PROC, STARTED_AT
-    if monitor.dsh_running():
+    if monitor.dsh_running(force=True):
         return {"ok": True, "already": True, "detail": "DSH 已在运行"}
     config.LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_file = open(config.DSH_LOG_FILE, "ab")
@@ -51,7 +51,7 @@ def start() -> dict:
 def stop() -> dict:
     """按端口找到监听进程并结束（无论谁启动的）。"""
     global PROC, STARTED_AT
-    if not monitor.dsh_running():
+    if not monitor.dsh_running(force=True):
         return {"ok": True, "detail": "DSH 未在运行"}
     ps = (
         "Get-NetTCPConnection -LocalPort {port} -State Listen -ErrorAction SilentlyContinue "

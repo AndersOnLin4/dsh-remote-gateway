@@ -7,7 +7,7 @@ import httpx
 from fastapi import Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 
-from . import config, monitor
+from . import config, events, monitor
 
 _client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=3.0), follow_redirects=False)
 
@@ -26,11 +26,12 @@ _COMPRESSIBLE = ("text/", "application/json", "application/javascript",
                  "application/xml", "application/xhtml+xml", "application/wasm")
 
 _UNAVAILABLE_HTML = """<!doctype html><html lang="zh"><meta charset="utf-8">
+<meta http-equiv="refresh" content="5">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DSH 未运行</title>
 <body style="font-family:system-ui;max-width:480px;margin:40px auto;padding:0 16px">
 <h2>DSH 未运行</h2>
-<p>Harness 后台当前没有在运行。</p>
+<p>Harness 后台当前没有在运行（页面每 5 秒自动重试，恢复后自动进入）。</p>
 <p><a href="/dashboard">前往仪表盘查看状态或启动它</a></p>
 </body></html>"""
 
@@ -246,8 +247,21 @@ def track_ws_frame(text: str) -> None:
             "questions": payload.get("questions") or [],
             "time": time.time(),
         }
+        events.broadcast(
+            "question",
+            {
+                "action": "requested",
+                "rpcId": obj.get("rpcId"),
+                "sessionId": payload.get("sessionId"),
+                "questions": payload.get("questions") or [],
+            },
+        )
     elif ptype == "question/resolved":
         PENDING_QUESTIONS.pop(payload.get("questionRpcId"), None)
+        events.broadcast(
+            "question",
+            {"action": "resolved", "rpcId": payload.get("questionRpcId")},
+        )
 
 
 def pending_questions(session_id: str, max_age: float = 1800):

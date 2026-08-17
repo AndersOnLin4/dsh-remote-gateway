@@ -1,20 +1,28 @@
-"""FastAPI 网关入口：登录 / 监控 / 控制 / 反向代理。"""
+"""FastAPI 网关入口：登录 / 监控 / 控制 / 反向代理 / SSE 事件推送。"""
 import asyncio
+import gzip
+import json
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse, FileResponse
+from fastapi.responses import JSONResponse, RedirectResponse, HTMLResponse, FileResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import auth, config, dsh_manager, monitor, proxy, sessions
+from . import auth, config, dsh_manager, events, monitor, proxy, sessions
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(proxy.question_watcher())
+    tasks = [
+        asyncio.create_task(proxy.question_watcher()),
+        asyncio.create_task(events.status_watcher()),
+        asyncio.create_task(events.session_watcher()),
+    ]
     yield
-    task.cancel()
+    for t in tasks:
+        t.cancel()
 
 
 app = FastAPI(title="DSH Remote Gateway", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
@@ -33,6 +41,72 @@ async def auth_middleware(request: Request, call_next):
             return JSONResponse({"ok": False, "detail": "未登录或会话已过期"}, status_code=401)
         return RedirectResponse("/dashboard", status_code=302)
     return await call_next(request)
+
+
+class GzipJsonMiddleware:
+    """纯 ASGI 中间件：对 application/json 的完整响应做 gzip（中文文本体积 -80%）。
+    SSE（text/event-stream）与其他流式响应立即放行，绝不缓冲。"""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        accept = ""
+        for k, v in scope.get("headers", []):
+            if k == b"accept-encoding":
+                accept = v.decode("latin-1", "replace").lower()
+        if "gzip" not in accept:
+            await self.app(scope, receive, send)
+            return
+
+        state = {"mode": "probe", "status": 200, "headers": [], "chunks": []}
+
+        async def send_wrapper(message):
+            mtype = message["type"]
+            if mtype == "http.response.start":
+                state["status"] = message["status"]
+                state["headers"] = list(message.get("headers") or [])
+                ct = ""
+                ce = ""
+                for k, v in state["headers"]:
+                    kl = k.decode("latin-1", "replace").lower()
+                    if kl == "content-type":
+                        ct = v.decode("latin-1", "replace").lower()
+                    elif kl == "content-encoding":
+                        ce = v.decode("latin-1", "replace").lower()
+                if "application/json" in ct and not ce and state["status"] == 200:
+                    state["mode"] = "buffer"
+                else:
+                    state["mode"] = "passthrough"
+                    await send(message)
+            elif mtype == "http.response.body":
+                if state["mode"] == "buffer":
+                    state["chunks"].append(message.get("body", b""))
+                    if not message.get("more_body", False):
+                        await self._flush(send, state)
+                else:
+                    await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+    async def _flush(self, send, state):
+        raw = b"".join(state["chunks"])
+        out_headers = []
+        for k, v in state["headers"]:
+            if k.decode("latin-1", "replace").lower() == "content-length":
+                continue
+            out_headers.append((k, v))
+        if len(raw) > 500:
+            body = gzip.compress(raw, 5)
+            out_headers.append((b"content-encoding", b"gzip"))
+            out_headers.append((b"vary", b"Accept-Encoding"))
+        else:
+            body = raw
+        await send({"type": "http.response.start", "status": state["status"], "headers": out_headers})
+        await send({"type": "http.response.body", "body": body})
 
 
 @app.exception_handler(HTTPException)
@@ -90,8 +164,8 @@ async def get_sessions(limit: int = 50):
 
 
 @app.get("/gw/session/{sid}/tail")
-async def get_session_tail(sid: str, n: int = 40):
-    return sessions.session_tail(sid, min(n, 100))
+async def get_session_tail(sid: str, n: int = 40, unchanged: int = 0):
+    return sessions.session_tail(sid, min(n, 100), unchanged_size=unchanged or None)
 
 
 @app.post("/gw/session/{sid}/send")
@@ -155,6 +229,44 @@ async def get_log(n: int = 300):
     return {"ok": True, "log": monitor.read_dsh_log(min(n, 2000))}
 
 
+# ---------- SSE 事件推送（移动 App 订阅） ----------
+def _sse(ev: dict) -> str:
+    return "data: " + json.dumps(ev, ensure_ascii=False) + "\n\n"
+
+
+@app.get("/gw/events")
+async def gw_events(request: Request):
+    if not auth.is_authed(request):
+        raise HTTPException(status_code=401, detail="未登录或会话已过期")
+
+    async def gen():
+        # 补发历史：只发状态类事件与 60 秒内的新鲜事件。
+        # 旧的选择题事件不重放，避免 App 每次连接重复弹旧通知。
+        yield _sse({"type": "hello", "data": {"ts": time.time()}})
+        now = time.time()
+        for ev in events.history():
+            if ev.get("type") == "status" or now - ev.get("ts", 0) < 60:
+                yield _sse(ev)
+        q = events.subscribe()
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    ev = await asyncio.wait_for(q.get(), timeout=15.0)
+                except asyncio.TimeoutError:
+                    ev = {"type": "heartbeat", "data": {"ts": time.time()}}
+                yield _sse(ev)
+        finally:
+            events.unsubscribe(q)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
 # ---------- 控制 ----------
 @app.post("/gw/control/{action}")
 async def control(action: str):
@@ -199,3 +311,7 @@ async def proxy_ws(ws: WebSocket, path: str):
         await ws.close(code=1008)
         return
     await proxy.proxy_websocket(ws, path)
+
+
+# 注册 gzip 压缩中间件（最后注册 = 最外层，保证拿到最终响应字节）
+app.add_middleware(GzipJsonMiddleware)
